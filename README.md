@@ -70,15 +70,6 @@ After a run, **`mcp-handoff/`** (or **`output.mcpHandoffDir`**) contains **`play
 
 Details: **`docs/IMPLEMENTATION_MCP.md`**.
 
-## Repository hygiene (git)
-
-Ignored by default (see **`.gitignore`**):
-
-- **`mcp-handoff/`** — regenerated handoff JSON
-- **`.playwright-mcp/`** — local Playwright MCP logs when using MCP from this workspace
-
-Do **not** ignore **`.cursor/rules/`**; those files are part of the intended workflow.
-
 ## Safety
 
 - **`paths.projectRepo`** must be the repository that should receive generated tests, specs, and k6 files. Wrong path means writes go to the wrong tree.
