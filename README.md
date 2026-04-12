@@ -1,60 +1,96 @@
-
 # CS4218 AI Test Bot
 
-This repository is an AI-driven helper that analyzes selected project files and generates Jest test templates via OpenAI.
+Config-driven Node tool that uses the OpenAI API to generate **Jest unit tests**, **Playwright integration / planner artifacts**, and **k6 performance scripts** in a target app repository (`projectRepo`). It writes **MCP handoff JSON** next to your config so a **Cursor** session (with Playwright and k6 MCP servers) can run tests and iterate using `.cursor/rules/mcp-test-orchestration.mdc`.
+
+Plain `node` does **not** speak MCP over stdio; generation and handoff live here, MCP execution is intended for Cursor.
 
 ## Prerequisites
+
 - Node.js (LTS)
-- `OPENAI_API_KEY` environment variable set for OpenAI API calls
+- `OPENAI_API_KEY` in the environment (or in a `.env` file at the repo root; `dotenv` is loaded by `index.js`)
 
 ## Setup
-1. Install dependencies:
 
 ```bash
 npm install
+cp agent.config.example.json agent.config.json
 ```
 
+Edit **`agent.config.json`**: set **`paths.projectRepo`** to your app repo (path is relative to the config file unless absolute), **`paths.userStories`** (or rely on **`paths.selectedFiles`** epics), and integration/performance URLs as needed.
 
-
-## Configuration
-
-- `PROJECT_REPO`: path to the target project where generated tests should be written. Can be set in `.env` or exported in your shell. Example:
+## Usage
 
 ```bash
-export PROJECT_REPO=/Users/you/Developer/cs4218-2520-ecom-project-cs4218-2520-team21
+node index.js [--config=./agent.config.json] [--agent=unit|integration|performance|all]
 ```
 
-
-- `OPENAI_MODEL` (optional): override model used for completions (default: `gpt-4`).
-- `OPENAI_CONCURRENCY` (optional): limit concurrent OpenAI requests (default: 3).
-
-## How selected files & user stories work
-- Configuration of which files to process lives in `selectedFiles.json`.
-- You can specify backend files and functions to target. You may also add an `epics` object in `selectedFiles.json` to map file paths to user stories (the orchestrator will attach these to generated tests as context).
-
-Example `selectedFiles.json` entries:
-
-- `frontend`: array of frontend file paths to analyze.
-- `backend`: object mapping backend file paths to arrays of function names.
-- `epics`: object mapping file paths to user story titles used as context for test generation.
-
-
-## Typical workflow
-
-1. Run the orchestrator `index.js` which:
-   - Generates unit-test templates for each selected file using OpenAI, using user stories as context if provided.
-   - Writes generated tests into `PROJECT_REPO`.
-
-## Safety & troubleshooting
-- Ensure `PROJECT_REPO` is the absolute path to the repository that should receive generated test files — the orchestrator writes tests into that path.
-- If generated tests appear in the wrong repo, confirm the `PROJECT_REPO` value visible to Node:
+Default agent comes from **`agent`** in the JSON; default config path is **`./agent.config.json`** or **`AGENT_CONFIG`** if set.
 
 ```bash
-node -e "require('dotenv').config(); console.log(process.env.PROJECT_REPO)"
+node index.js --help
 ```
 
-- If OpenAI calls fail, check `OPENAI_API_KEY`, `OPENAI_MODEL`, and `OPENAI_CONCURRENCY` settings.
+## Environment variables
 
-## Notes
-- `utils/fileUtils.js` uses an AST-based extractor (Acorn) to find functions; this is more accurate than regex but not perfect.
-- The orchestrator now uses a concurrency-limited OpenAI queue and retries transient errors.
+| Variable | Role |
+|----------|------|
+| `OPENAI_API_KEY` | Required for API calls |
+| `OPENAI_MODEL` | Optional (default `gpt-4`) |
+| `OPENAI_CONCURRENCY` | Optional max concurrent requests (default `3`) |
+| `AGENT_CONFIG` | Optional default path to `agent.config.json` |
+| `BASE_URL` | Optional fallback when config omits integration/performance base URLs |
+
+## What each agent does
+
+All writable paths under **`paths.projectRepo`** are **outside** this repo unless you point `projectRepo` here (not recommended).
+
+### Unit (`--agent=unit`)
+
+- Uses **`selectedFiles.json`** (see **`paths.selectedFiles`**) and user stories to target backend files / functions.
+- Generates or updates **Jest** tests under `projectRepo`. Optional **`unit.autoFix`** loop runs Jest and asks the model for fixes.
+
+### Integration (`--agent=integration`)
+
+- **`integration.layout`**: **`playwright-agents`** (default) writes planner markdown under **`projectRepo/specs/`**, ensures **`projectRepo/tests/seed.spec.ts`**, and prepares Playwright MCP handoff. **`legacy`** writes **`projectRepo/__tests__/integration/*.spec.js`** and runs static review + LLM review on generated specs.
+- **`integration.executor`**: **`mcp`** (default) skips local Playwright CLI except optional seed install; **`cli`** / **`both`** can run `npx playwright test` from `projectRepo` when configured.
+
+### Performance (`--agent=performance`)
+
+- Writes **`{mode}_test.js`** under **`projectRepo/<performance.scriptDirectory>/`** (modes from user story **`testFor`** or **`performance.modes`**).
+- Writes **`k6.env`** there with **`BASE_URL`**, **`K6_LOGIN_EMAIL`**, and **`K6_LOGIN_PASSWORD`** (defaults configurable via **`performance.k6LoginEmail`** / **`k6LoginPassword`**).
+- **`performance.executor`**: **`mcp`** only generates files + handoff; run k6 yourself after `set -a && . ./k6.env && set +a` in that directory, or use Cursor k6 MCP from **`mcp-handoff/k6-mcp.json`**. **`cli`** / **`both`** runs **`k6 run`** locally when `k6` is on `PATH`.
+
+## User stories and `testFor`
+
+Stories may include **`testFor`** tokens to scope agents (e.g. `integration`, `performance`, `load`). See **`docs/IMPLEMENTATION_MCP.md`** for the alias table. Omit **`testFor`** or use broad tokens so **`--agent=all`** includes every agent.
+
+## MCP handoff and Cursor
+
+After a run, **`mcp-handoff/`** (or **`output.mcpHandoffDir`**) contains **`playwright-mcp.json`** and **`k6-mcp.json`**. Keep **`.cursor/rules/`** committed so clones get the same orchestration rule.
+
+Details: **`docs/IMPLEMENTATION_MCP.md`**.
+
+## Repository hygiene (git)
+
+Ignored by default (see **`.gitignore`**):
+
+- **`mcp-handoff/`** — regenerated handoff JSON
+- **`.playwright-mcp/`** — local Playwright MCP logs when using MCP from this workspace
+
+Do **not** ignore **`.cursor/rules/`**; those files are part of the intended workflow.
+
+## Safety
+
+- **`paths.projectRepo`** must be the repository that should receive generated tests, specs, and k6 files. Wrong path means writes go to the wrong tree.
+- **`k6.env`** can contain dev credentials; treat it like secrets in shared repos (override in config, add to the app repo’s `.gitignore` if needed).
+
+## Troubleshooting
+
+- **Config not found**: copy **`agent.config.example.json`** to **`agent.config.json`** next to **`index.js`** (or pass **`--config=`**).
+- **`projectRepo not found`**: fix **`paths.projectRepo`** to an existing directory (resolve paths relative to the config file’s directory).
+- **OpenAI errors**: verify **`OPENAI_API_KEY`**, **`OPENAI_MODEL`**, and network access.
+
+## Implementation notes
+
+- **`utils/fileUtils.js`** uses **Acorn** to extract functions for unit-test context.
+- OpenAI calls use a small concurrency limit and retries for transient failures.
