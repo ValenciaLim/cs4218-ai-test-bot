@@ -1,0 +1,28 @@
+{
+  "stories": [
+    {
+      "title": "Admin views user list",
+      "type": "story",
+      "priority": "high",
+      "testFor": "unit,integration",
+      "description": "Given an authenticated admin, when they open the Users admin page, then the page shows a list or table of users and primary actions are visible.",
+      "files": ["client/src/pages/admin/Users.js"]
+    },
+    {
+      "title": "Private route blocks unauthenticated access",
+      "type": "story",
+      "priority": "medium",
+      "testFor": "unit",
+      "description": "As a visitor, I want to prevent access to protected pages and redirect to login so only authenticated users see their dashboard and profile.",
+      "files": ["client/src/components/Routes/Private.js"]
+    },
+    {
+      "title": "Stress test authentication endpoint /auth/login",
+      "type": "story",
+      "priority": "very high",
+      "testFor": "stress,load",
+      "description": "Create load + stress test script for login API, Simulate concurrent users logging in, Include valid + invalid credential scenarios",
+      "files": ["client/src/pages/Auth/Login.js"]
+    }
+  ]
+}

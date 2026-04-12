@@ -1,0 +1,36 @@
+---
+description: After integration/performance test generation, orchestrate Playwright MCP (init-agents, seed, planner/generator/healer) and k6 MCP tools automatically — do not ask the user to run MCP manually.
+alwaysApply: true
+---
+
+# MCP orchestration for this repo
+
+The Node entrypoint (`node index.js`) only **generates** artifacts and writes **handoff JSON**. It does not call MCP. **You (the Cursor agent)** must use the configured MCP servers from the user’s `~/.cursor/mcp.json` to complete integration/UI and performance workflows.
+
+## When `mcp-handoff/playwright-mcp.json` exists or was just updated
+
+1. Read the JSON: `layout`, `initAgents`, `conventions`, `baseUrl`, `projectRepo`, `generatedSpecs` (each entry may include `kind`: `plannerMarkdown` vs `playwrightTest`), `userStories`, `playwrightTestAgents`, `cursorAgentMust`.
+
+2. **Playwright Test Agents** (see `docsUrl` / https://playwright.dev/docs/test-agents): definitions come from **`npx playwright init-agents --loop=…`** in **`projectRepo`** (regenerate when `@playwright/test` is upgraded). Typical layout:
+   - **Agent definitions** — under `.github/` (and related paths) from `init-agents`
+   - **`specs/`** — human-readable markdown test plans (Planner output; this bot may pre-write drafts as `kind: plannerMarkdown`)
+   - **`tests/`** — generated Playwright tests (Generator output), plus **`tests/seed.spec.ts`** — seed test that runs global setup, fixtures, and hooks
+
+3. Use the **Playwright** MCP server (`mcpServerId` / `mcpCommand` from the handoff) in this order:
+   - **🎭 Planner** — Inputs: clear goal from `userStories`, **`tests/seed.spec.ts`** in context (run it to bootstrap), optional PRD from story text. Output: refined or new **`specs/*.md`** plans (precise steps + expected outcomes).
+   - **🎭 Generator** — Inputs: markdown under **`specs/`** (include every path listed in `conventions.generatedThisRun.plannerMarkdown` when present). Output: executable tests under **`tests/`** (e.g. `*.spec.ts`); verify selectors against the live app at `baseUrl`.
+   - **🎭 Healer** — Inputs: failing test name(s). Replay steps, inspect UI, patch locators/waits/data, re-run until green or document blockers / skip with rationale.
+
+4. If `layout` is **`legacy`**, `generatedSpecs` may point at `__tests__/integration/*.spec.js` instead; still run Planner → Generator → Healer as needed to align with the target app.
+
+5. Do **not** tell the user to “open Playwright MCP themselves”; you run the tools and summarize outcomes (inputs, artifacts, risks per phase).
+
+## When `mcp-handoff/k6-mcp.json` exists or was just updated
+
+1. Read `mcp-handoff/k6-mcp.json` for **`primaryScripts`** (each `{ mode, relativePath, absolutePath }` — typically `load`, `soak`, `stress`, `spike`), **`scriptDirectory`**, `baseUrl`, `mcpRunDefaults`, **`mcpRunByMode`** (per-mode overrides), and **`k6McpWorkflow`**.
+2. Use the **k6** MCP server and execute **`k6McpWorkflow.steps`** in order. **Validate and run every script** in `primaryScripts`, not only soak — each mode may use different VUs/duration from `mcpRunByMode[mode]` merged over `mcpRunDefaults`.
+3. State the **effective BASE_URL** for the running API (from handoff `baseUrl` or env) in your summary.
+4. After each `run_script`, summarize **exit code**, **stderr**, and whether **thresholds** passed for that mode.
+5. Do **not** defer k6 MCP steps to the user; you run them and report.
+
+If an MCP tool name or parameter does not exist on the user’s server, read that server’s tool schema in Cursor and adapt once, then continue.

@@ -1,0 +1,46 @@
+{
+  "agent": "all",
+  "paths": {
+    "projectRepo": "/Users/limruitingvalencia/Developer/cs4218-2520-cs4218-2520-ecom-project-ecom",
+    "userStories": "./sample-user-stories.json",
+    "selectedFiles": "./selectedFiles.json"
+  },
+  "mcp": {
+    "playwright": {
+      "serverId": "Playwright",
+      "command": "npx @playwright/mcp@latest"
+    },
+    "k6": {
+      "serverId": "k6",
+      "command": "mcp-k6"
+    }
+  },
+  "integration": {
+    "executor": "mcp",
+    "baseUrl": "http://localhost:3001",
+    "layout": "playwright-agents",
+    "initAgentsLoop": "vscode",
+    "runInitAgents": false,
+    "overwriteSeed": false,
+    "runPlaywrightInstall": true
+  },
+  "performance": {
+    "executor": "mcp",
+    "baseUrl": "http://localhost:3001",
+    "scriptDirectory": "tests/performance-testing",
+    "k6MinScenarioDurationSeconds": 180,
+    "modes": ["load", "soak", "stress", "spike"],
+    "mcpRunDefaults": { "vus": 5, "duration": "2m" },
+    "mcpRunByMode": {
+      "spike": { "vus": 80, "duration": "1m" },
+      "stress": { "vus": 40, "duration": "2m" }
+    }
+  },
+  "unit": {
+    "autoFix": false,
+    "maxFixRounds": 1
+  },
+  "output": {
+    "mcpHandoffDir": "./mcp-handoff"
+  }
+}

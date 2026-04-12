@@ -2,10 +2,14 @@
   "backend": {
   },
   "frontend": [
-    "client/src/pages/admin/Users.js"
+    "client/src/pages/admin/Users.js",
+    "client/src/components/Routes/Private.js",
+    "client/src/pages/Auth/Login.js"
   ]
   ,
   "epics": {
-    "client/src/pages/admin/Users.js": "View User"
+    "client/src/pages/admin/Users.js": "View User",
+    "client/src/components/Routes/Private.js": "Private Route",
+    "client/src/pages/Auth/Login.js": "Login"
   }
 }
