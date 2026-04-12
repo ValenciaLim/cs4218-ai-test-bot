@@ -30,6 +30,74 @@ Default agent comes from **`agent`** in the JSON; default config path is **`./ag
 node index.js --help
 ```
 
+## Step-by-step guides
+
+Do the **one-time prep** once, then follow the section for the agent you need.
+
+### One-time prep (every machine)
+
+1. Clone this repo and run **`npm install`** in the bot directory.
+2. Copy **`agent.config.example.json`** to **`agent.config.json`** and open it for editing.
+3. Set **`paths.projectRepo`** to your **application** repository (absolute path, or relative to the directory that contains **`agent.config.json`**).
+4. Choose how stories are supplied:
+   - Set **`paths.userStories`** to a JSON file (see **`sample-user-stories.json`**), **or**
+   - Omit **`paths.userStories`** and put **`epics`** (and backend/frontend entries) in **`paths.selectedFiles`** so stories are derived from the manifest.
+5. Ensure **`paths.selectedFiles`** points at a **`selectedFiles.json`** that lists the backend files (and optional frontend paths) you want the unit and integration agents to consider.
+6. Put **`OPENAI_API_KEY`** in a **`.env`** file in the bot repo or export it in your shell.
+7. In Cursor, configure **Playwright** and **k6** MCP servers (server ids should match **`mcp.playwright.serverId`** and **`mcp.k6.serverId`** in your config, or adjust the JSON to match your **`~/.cursor/mcp.json`**).
+
+From the bot repo directory, run agents with **`node index.js --config=./agent.config.json --agent=...`**. Omit **`--agent`** to use the **`agent`** field in **`agent.config.json`** (e.g. **`all`**).
+
+---
+
+### Unit agent
+
+1. Confirm **`paths.projectRepo`** points at the repo that already has **`node_modules`** and your source files under test.
+2. In **`selectedFiles.json`**, list **`backend`** file paths and function names (and **`frontend`** if you use them for context). Add **`epics`** keyed by file path if you are not using a separate **`userStories`** file.
+3. In your user stories (file or epics), use **`testFor`** values that include **`unit`**, **`jest`**, or **`unittest`** if you want only unit-relevant stories; otherwise the unit agent still runs with the stories it receives when you pass **`--agent=unit`**.
+4. Optionally tune **`unit.autoFix`**, **`unit.maxFixRounds`**, and **`unit.demoInjectFailingAssertion`** in **`agent.config.json`**.
+5. Run **`node index.js --agent=unit`** (or **`--agent=all`**).
+6. Open **`projectRepo`** and inspect new or updated **`*.test.js`** files next to the targeted modules (or as configured by the generator). Run **`npm test`** or **`npx jest`** in **`projectRepo`** to execute them.
+
+---
+
+### Integration agent (default: `playwright-agents`)
+
+1. Set **`integration.baseUrl`** in **`agent.config.json`** to the URL of a running app (for example **`http://localhost:3001`**).
+2. Keep **`integration.layout`** as **`playwright-agents`** unless you intentionally want **`legacy`** (see below).
+3. Ensure **`projectRepo`** has **`@playwright/test`** in **`package.json`** if you want **`integration.runPlaywrightInstall`** to install browsers.
+4. Run **`node index.js --agent=integration`**.
+5. In **`projectRepo`**, you should see **`specs/*.md`** planner output and **`tests/seed.spec.ts`** (created or updated per **`integration.overwriteSeed`**).
+6. In this bot repo, open **`mcp-handoff/playwright-mcp.json`** after the run. In **Cursor**, use the Playwright MCP and the rule in **`.cursor/rules/mcp-test-orchestration.mdc`**: Planner → Generator → Healer using that handoff (**`integration.executor`** **`mcp`** means Node did not run full suites for you).
+7. If you set **`integration.executor`** to **`cli`** or **`both`**, Node will also run **`npx playwright test`** for the seed (and in **`legacy`** layout, per generated spec) from **`projectRepo`**; fix failures or use Healer in Cursor.
+
+**Legacy layout (`integration.layout`: `legacy`):** steps 1 and 4 are the same; output goes under **`projectRepo/__tests__/integration/`** as **`*.spec.js`**. Static review and an LLM review run on each generated file before handoff.
+
+---
+
+### Performance agent
+
+1. Set **`performance.baseUrl`** (and optionally **`performance.scriptDirectory`**, **`performance.modes`**, **`performance.k6MinScenarioDurationSeconds`**) in **`agent.config.json`**.
+2. Set **`performance.k6LoginEmail`** and **`performance.k6LoginPassword`** if the defaults (**`admin@admin.com`** / **`admin`**) are wrong for your API.
+3. Run **`node index.js --agent=performance`**.
+4. In **`projectRepo`**, under **`performance.scriptDirectory`** (default **`tests/performance-testing/`**), find **`k6.env`**, **`load_test.js`**, and other **`{mode}_test.js`** files.
+5. Start your API on the same host and port as **`BASE_URL`** inside **`k6.env`**.
+6. From that directory, run:
+   **`set -a && . ./k6.env && set +a && k6 run ./load_test.js`**  
+   (adjust the script name for soak, stress, or spike). Add **`K6_WEB_DASHBOARD=true`** if you want the dashboard.
+7. For Cursor-driven runs, use **`mcp-handoff/k6-mcp.json`** and the k6 MCP workflow described in **`docs/IMPLEMENTATION_MCP.md`**.
+8. If **`performance.executor`** is **`cli`** or **`both`**, Node will run **`k6 run`** locally after each script when **`k6`** is on your **`PATH`**.
+
+---
+
+### Run everything (`all`)
+
+1. Complete **one-time prep** above.
+2. Set **`agent`** in **`agent.config.json`** to **`all`**, or run **`node index.js --agent=all`**.
+3. The unit, integration, and performance agents run in sequence. Use Cursor with both handoff files as they are updated.
+
+---
+
 ## Environment variables
 
 | Variable | Role |
