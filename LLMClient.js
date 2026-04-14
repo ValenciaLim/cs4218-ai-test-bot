@@ -55,38 +55,6 @@ async function sendChatCompletion(params) {
   return enqueueOpenAI(() => openai.chat.completions.create(params));
 }
 
-// Generate AI-powered user story from code
-async function generateUserStory(code, filePath) {
-  const prompt = `Please respond with a JSON object containing keys: title, description, sprint (optional), epic (optional), priority (optional), points (optional), assignee (optional).\nAnalyze the following JavaScript/React code and generate appropriate values.\n\nCode:\n${code}`;
-
-  const call = async () => {
-    const completion = await sendChatCompletion({
-      model: process.env.OPENAI_MODEL || "gpt-4",
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.2
-    });
-    const text = (completion.choices?.[0]?.message?.content || "").trim();
-    // Try parse JSON, fallback to naive split
-    try {
-      const parsed = JSON.parse(text);
-      return {
-        title: parsed.title || "Auto-generated Story",
-        description: parsed.description || parsed.desc || "",
-        sprint: parsed.sprint || "",
-        epic: parsed.epic || "",
-        priority: parsed.priority || "",
-        points: parsed.points || "",
-        assignee: parsed.assignee || ""
-      };
-    } catch (e) {
-      const [titleLine, ...descLines] = text.split("\n");
-      return { title: titleLine || "Auto-generated Story", description: descLines.join("\n") };
-    }
-  };
-
-  return retry(call, 3, 500);
-}
-
 // Generate Jest unit tests for a file
 async function generateUnitTest(filePath, code, extraInfo = {}) {
   const functions = extraInfo.functions || extractFunctions(code, extraInfo.functions || []);
@@ -277,6 +245,53 @@ Output **markdown only**. Do not wrap the entire document in one markdown code f
   };
   const raw = await retry(call, 3, 500);
   return stripOuterMarkdownFence(raw);
+}
+
+/**
+ * Playwright Test Agents — **Generator** step: executable test from Planner markdown.
+ * Mirrors https://playwright.dev/docs/test-agents (Generator consumes specs/*.md → tests/*.spec.js).
+ */
+async function generatePlaywrightGeneratorSpecFromPlan({
+  plannerMarkdown,
+  userStory,
+  baseUrl,
+  plannerRelativePath
+}) {
+  const us = userStory || {};
+  const plan = String(plannerMarkdown || "").slice(0, 18000);
+  const url = String(baseUrl || "").trim() || "http://localhost:3000";
+  const prompt = `You are the Playwright **Generator** test agent. Implement an executable **@playwright/test** file from the markdown plan below.
+
+Rules:
+- Use **CommonJS**: \`const { test, expect } = require('@playwright/test');\`
+- One file, one primary \`test.describe\` named from the user story title (sanitize for a short title string).
+- Follow the plan's main flow steps in order; use **getByRole**, **getByText**, and accessible selectors. Prefer \`await expect(locator).toBeVisible()\` over loose truthy checks.
+- Use \`baseURL\`-friendly navigation: prefer \`await page.goto('/relative/path')\` when the plan gives a path under the app; if you must use a full URL, use the app base: ${JSON.stringify(url)}
+- Assume \`tests/seed.spec.ts\` exists as the seed (do not import it). Match its style: plain \`@playwright/test\`, no custom fixtures unless the plan explicitly requires them.
+- If the plan says a table or actions are **not yet implemented**, write **stable** assertions only for what the plan marks as currently verifiable (e.g. main heading, sidebar); use \`test.skip\` or conditional expects only when necessary, and add a short comment.
+- Add a top comment: \`// spec: ${plannerRelativePath || "specs/..."}\` and \`// seed: tests/seed.spec.ts\`
+- Output **only** the JavaScript test file body (no markdown fences).
+
+User story (context):
+- Title: ${us.title || ""}
+- Description: ${us.description || ""}
+
+--- Markdown plan ---
+
+${plan}
+`;
+
+  const call = async () => {
+    const completion = await sendChatCompletion({
+      model: process.env.OPENAI_MODEL || "gpt-4",
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.3
+    });
+    let out = (completion.choices?.[0]?.message?.content || "").trim();
+    out = extractFirstCodeBlock(out);
+    return out;
+  };
+  return retry(call, 3, 500);
 }
 
 function extractFirstCodeBlock(text) {
@@ -506,6 +521,7 @@ module.exports = {
   writeUnitTests,
   generateIntegrationUITest,
   generatePlannerSpecMarkdown,
+  generatePlaywrightGeneratorSpecFromPlan,
   analyzeJestFailures,
   suggestFixes,
   generateAdditionalTestInputs,

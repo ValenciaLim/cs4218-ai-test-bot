@@ -17,7 +17,7 @@
   },
   "integration": {
     "executor": "mcp",
-    "baseUrl": "http://localhost:3001",
+    "baseUrl": "http://localhost:6061",
     "layout": "playwright-agents",
     "initAgentsLoop": "vscode",
     "runInitAgents": false,
@@ -26,7 +26,7 @@
   },
   "performance": {
     "executor": "mcp",
-    "baseUrl": "http://localhost:3001",
+    "baseUrl": "http://localhost:6061",
     "scriptDirectory": "tests/performance-testing",
     "k6MinScenarioDurationSeconds": 180,
     "modes": ["load", "soak", "stress", "spike"],

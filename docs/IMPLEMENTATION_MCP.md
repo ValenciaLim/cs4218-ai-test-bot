@@ -2,11 +2,20 @@
 
 ## What `node index.js` does
 
-- **Generates** Playwright specs under `projectRepo/__tests__/integration/`.
+- **Integration (`playwright-agents` layout):** writes **`projectRepo/specs/*.md`** (Planner-style plans) and **`projectRepo/tests/<StoryName>.spec.js`** (Generator-style specs from those plans via LLM), plus **`tests/seed.spec.ts`**. **`legacy`** layout still writes **`projectRepo/__tests__/integration/*.spec.js`** only.
 - **Generates** one k6 script per configured **mode** under **`projectRepo/<performance.scriptDirectory>/`** as **`{mode}_test.js`** (e.g. `load_test.js`, `soak_test.js`, `stress_test.js`, `spike_test.js`). Modes come from **`performance.modes`** (subset of: `load`, `soak`, `stress`, `spike`). It also writes **`k6.env`** in that folder with **`export BASE_URL=...`** from **`performance.baseUrl`** (or env / default) so you can **`source`** it before manual **`k6 run`** in the project repo.
 - Writes **`mcp-handoff/playwright-mcp.json`** and **`mcp-handoff/k6-mcp.json`** with **`primaryScripts[]`**, **`mcpRunByMode`**, **`playwrightTestAgents`**, and **`k6McpWorkflow.steps`** for k6 MCP (`validate_script`, `run_script`, `list_sections`, `get_documentation`, resource `docs://k6/best_practices`).
 
 It does **not** call MCP over stdio/HTTP — that is not available from plain Node in this design.
+
+### Who actually writes integration and performance artifacts?
+
+| Phase | Who | Mechanism |
+|--------|-----|-----------|
+| **Writing** `specs/*.md`, `tests/*.spec.js`, `__tests__/integration/*.spec.js`, `{mode}_test.js`, `k6.env` | **`node index.js`** | **OpenAI API** only (`LLMClient` — same stack as unit tests). **Not** Playwright MCP and **not** k6 MCP. |
+| **Browsing UI, validating/running k6, healing specs** | **Cursor agent** | **Playwright MCP** + **k6 MCP** per handoff JSON and `.cursor/rules/mcp-test-orchestration.mdc`. |
+
+Playwright MCP exposes **browser** tools (navigate, snapshot, `browser_run_code`, …), not a dedicated “write `tests/foo.spec.js` to disk” tool; upstream **Test Agents** combine those with an AI host (e.g. Cursor). k6 MCP exposes **`validate_script`**, **`run_script`**, docs, etc. — useful **after** scripts exist, or to refine them in chat, not what `node index.js` calls today.
 
 ## What the Cursor agent must do
 

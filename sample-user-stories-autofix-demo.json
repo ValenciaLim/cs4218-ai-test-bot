@@ -1,0 +1,13 @@
+{
+  "demoInstructions": "1) cd fixtures/autofix-demo && npm install  2) From repo root: node index.js --config=agent.autofix-demo.config.json  With unit.demoInjectFailingAssertion true (default in that config), the bot appends a failing expect(tipPct(99.99)).toBe(20) so Jest fails once, then autofix repairs. Set demoInjectFailingAssertion false for normal runs.",
+  "stories": [
+    {
+      "title": "Tiered tip percentage for checkout",
+      "type": "story",
+      "priority": "high",
+      "testFor": "unit",
+      "description": "Given the pre-tax subtotal in dollars, tipPct must return the suggested gratuity rate as a whole-number percentage (not a decimal fraction). When the subtotal is strictly below 100, the rate is 18. When the subtotal is 100 or greater, the rate is 15. Non-numeric input should yield 0. Cover boundary values 99.99, 100, and 0.",
+      "files": ["src/tip.js"]
+    }
+  ]
+}

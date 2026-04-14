@@ -4,6 +4,7 @@ const { spawnSync } = require("child_process");
 const {
   generateIntegrationUITest,
   generatePlannerSpecMarkdown,
+  generatePlaywrightGeneratorSpecFromPlan,
   reviewIntegrationTestsLLM
 } = require("../LLMClient");
 const { reviewIntegrationTestCode } = require("../lib/integrationStaticReview");
@@ -192,13 +193,15 @@ async function runIntegrationTestAgent({
     }
   } else {
     const specsDir = path.join(projectRepo, "specs");
+    const testsDir = path.join(projectRepo, "tests");
     await fs.ensureDir(specsDir);
+    await fs.ensureDir(testsDir);
     const seedAbs = await ensureSeedSpec(projectRepo, {
       overwriteSeed: integration.overwriteSeed
     });
     const relSeed = path.relative(projectRepo, seedAbs).replace(/\\/g, "/");
     console.log(
-      `[integration] Playwright Test Agents layout: planner markdown → ${specsDir.replace(/\\/g, "/")}; seed → ${relSeed}`
+      `[integration] Playwright Test Agents layout: planner markdown → ${specsDir.replace(/\\/g, "/")}; Generator → ${testsDir.replace(/\\/g, "/")}/*.spec.js; seed → ${relSeed}`
     );
 
     for (const story of list) {
@@ -243,31 +246,50 @@ async function runIntegrationTestAgent({
           absolutePath: planFile
         });
 
+        const testContent = await generatePlaywrightGeneratorSpecFromPlan({
+          plannerMarkdown: md,
+          userStory,
+          baseUrl: integration.baseUrl || "",
+          plannerRelativePath: relPlan
+        });
+        const specFile = path.join(testsDir, `${safeName}.spec.js`);
+        await fs.writeFile(specFile, testContent, "utf-8");
+        const relSpecJs = path.relative(projectRepo, specFile).replace(/\\/g, "/");
+        console.log(`[integration] Generator wrote Playwright spec: ${specFile}`);
+        generatedSpecs.push({
+          storyTitle: story.title,
+          specPath: relSpecJs,
+          kind: "playwrightTest",
+          absolutePath: specFile
+        });
+
         if (executor === "cli" || executor === "both") {
-          const r = spawnSync("npx", ["playwright", "test", relSeed], {
+          const r = spawnSync("npx", ["playwright", "test", relSpecJs], {
             cwd: projectRepo,
             encoding: "utf-8",
             maxBuffer: 20 * 1024 * 1024,
             env: { ...process.env, CI: "1" }
           });
           console.log(
-            `[integration] CLI seed only (agents layout) exit ${r.status}\n${(r.stdout || "").slice(-3000)}`
+            `[integration] CLI playwright test (${relSpecJs}) exit ${r.status}\n${(r.stdout || "").slice(-3000)}`
           );
           if (r.stderr) console.error(r.stderr.slice(-2000));
           outputs.push({
             story: story.title,
             plannerMarkdown: planFile,
+            playwrightSpec: specFile,
             seedTest: seedAbs,
             playwrightStatus: r.status,
-            note: "Executable flows: use Playwright MCP Generator on specs/*.md (see handoff)."
+            note: "Healer (MCP or init-agents) can fix failures; seed at tests/seed.spec.ts."
           });
         } else {
           outputs.push({
             story: story.title,
             plannerMarkdown: planFile,
+            playwrightSpec: specFile,
             seedTest: seedAbs,
             executor: "mcp",
-            note: "Use MCP Generator on plannerMarkdown; Healer on failing generated tests."
+            note: "Node wrote tests/*.spec.js from the plan; use MCP Healer if runs fail."
           });
         }
       } catch (e) {

@@ -5,7 +5,7 @@ alwaysApply: true
 
 # MCP orchestration for this repo
 
-The Node entrypoint (`node index.js`) only **generates** artifacts and writes **handoff JSON**. It does not call MCP. **You (the Cursor agent)** must use the configured MCP servers from the user’s `~/.cursor/mcp.json` to complete integration/UI and performance workflows.
+The Node entrypoint (`node index.js`) **generates** artifacts (including **`tests/*.spec.js`** from **`specs/*.md`** when `layout` is `playwright-agents`) and writes **handoff JSON**. It does not call MCP. **You (the Cursor agent)** must use the configured MCP servers from the user’s `~/.cursor/mcp.json` to refine integration/UI (Planner/Generator/Healer) and to run performance workflows.
 
 ## When `mcp-handoff/playwright-mcp.json` exists or was just updated
 
@@ -14,11 +14,11 @@ The Node entrypoint (`node index.js`) only **generates** artifacts and writes **
 2. **Playwright Test Agents** (see `docsUrl` / https://playwright.dev/docs/test-agents): definitions come from **`npx playwright init-agents --loop=…`** in **`projectRepo`** (regenerate when `@playwright/test` is upgraded). Typical layout:
    - **Agent definitions** — under `.github/` (and related paths) from `init-agents`
    - **`specs/`** — human-readable markdown test plans (Planner output; this bot may pre-write drafts as `kind: plannerMarkdown`)
-   - **`tests/`** — generated Playwright tests (Generator output), plus **`tests/seed.spec.ts`** — seed test that runs global setup, fixtures, and hooks
+   - **`tests/`** — **`tests/seed.spec.ts`** plus **`tests/<StoryName>.spec.js`** pre-written by Node (Generator LLM). Refine with MCP.
 
 3. Use the **Playwright** MCP server (`mcpServerId` / `mcpCommand` from the handoff) in this order:
    - **🎭 Planner** — Inputs: clear goal from `userStories`, **`tests/seed.spec.ts`** in context (run it to bootstrap), optional PRD from story text. Output: refined or new **`specs/*.md`** plans (precise steps + expected outcomes).
-   - **🎭 Generator** — Inputs: markdown under **`specs/`** (include every path listed in `conventions.generatedThisRun.plannerMarkdown` when present). Output: executable tests under **`tests/`** (e.g. `*.spec.ts`); verify selectors against the live app at `baseUrl`.
+   - **🎭 Generator** — Inputs: markdown under **`specs/`** and existing **`tests/*.spec.js`** from `conventions.generatedThisRun.playwrightSpecs` when present. Output: updated tests under **`tests/`** verified against the live app at `baseUrl` (selectors, waits, assertions).
    - **🎭 Healer** — Inputs: failing test name(s). Replay steps, inspect UI, patch locators/waits/data, re-run until green or document blockers / skip with rationale.
 
 4. If `layout` is **`legacy`**, `generatedSpecs` may point at `__tests__/integration/*.spec.js` instead; still run Planner → Generator → Healer as needed to align with the target app.

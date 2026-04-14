@@ -1,0 +1,20 @@
+{
+  "agent": "unit",
+  "paths": {
+    "projectRepo": "./fixtures/autofix-demo",
+    "userStories": "./sample-user-stories-autofix-demo.json",
+    "selectedFiles": "./fixtures/autofix-demo/selectedFiles.json"
+  },
+  "mcp": {
+    "playwright": { "serverId": "Playwright", "command": "npx @playwright/mcp@latest" },
+    "k6": { "serverId": "k6", "command": "mcp-k6" }
+  },
+  "integration": { "executor": "mcp", "baseUrl": "http://localhost:3000" },
+  "performance": { "executor": "mcp", "baseUrl": "http://localhost:3000", "modes": ["load"] },
+  "unit": {
+    "autoFix": true,
+    "maxFixRounds": 3,
+    "demoInjectFailingAssertion": true
+  },
+  "output": { "mcpHandoffDir": "./mcp-handoff" }
+}

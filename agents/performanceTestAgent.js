@@ -38,7 +38,7 @@ async function runPerformanceTestAgent({ projectRepo, stories, performance = {},
   const list = fromStories.length ? fromStories : normalizeModes(performance.modes);
   const baseUrl = performance.baseUrl || process.env.BASE_URL || "";
   const resolvedBaseUrl =
-    (baseUrl || process.env.BASE_URL || "").trim() || "http://localhost:3001";
+    (baseUrl || process.env.BASE_URL || "").trim() || "http://localhost:6061";
   const mcpRunDefaults = performance.mcpRunDefaults || { vus: 5, duration: "2m" };
   const mcpRunByMode = performance.mcpRunByMode || {};
   const k6MinScenarioDurationSeconds = performance.k6MinScenarioDurationSeconds ?? 120;

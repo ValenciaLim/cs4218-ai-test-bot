@@ -3,13 +3,11 @@
   },
   "frontend": [
     "client/src/pages/admin/Users.js",
-    "client/src/components/Routes/Private.js",
-    "client/src/pages/Auth/Login.js"
+    "client/src/components/Routes/Private.js"
   ]
   ,
   "epics": {
     "client/src/pages/admin/Users.js": "View User",
-    "client/src/components/Routes/Private.js": "Private Route",
-    "client/src/pages/Auth/Login.js": "Login"
+    "client/src/components/Routes/Private.js": "Private Route"
   }
 }
